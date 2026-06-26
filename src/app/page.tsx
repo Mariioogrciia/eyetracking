@@ -8,7 +8,7 @@ import Header from '@/components/Dashboard/Header';
 import SystemStatus from '@/components/Dashboard/SystemStatus';
 import ClinicalMetrics from '@/components/Dashboard/ClinicalMetrics';
 import Biomarkers from '@/components/Dashboard/Biomarkers';
-import { useWebGazer } from '@/hooks/useWebGazer';
+import { useEyeTracker } from '@/hooks/useEyeTracker';
 import styles from './page.module.css';
 
 // Mock Dataset
@@ -30,11 +30,14 @@ export default function Dashboard() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [videoRef, setVideoRef] = useState<React.RefObject<HTMLVideoElement | null>>({ current: null });
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Kept just in case, but hidden from UI
-  };
-
-  const { isReady, getPoints, clearPoints } = useWebGazer({
+  const {
+    isReady,
+    error: trackingError,
+    getPoints,
+    clearPoints,
+    recordCalibrationPoint,
+    resetCalibration
+  } = useEyeTracker({
     isMeasuring: isMeasuring && viewMode === 'capture',
     containerRef,
     videoRef,
@@ -59,14 +62,12 @@ export default function Dashboard() {
       .catch(console.error);
   }, []);
 
-  // Clean data when changing stimulus
-  useEffect(() => {
-    if (isMeasuring) {
-      setIsMeasuring(false);
-    }
+  const handleStimulusChange = (nextStimulus: string) => {
+    setSelectedStimulus(nextStimulus);
+    setIsMeasuring(false);
     clearPoints();
     setMetrics({ top: 0, bottom: 0 });
-  }, [selectedStimulus, clearPoints]);
+  };
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -94,7 +95,7 @@ export default function Dashboard() {
 
   const handleCalibrate = () => {
     setIsMeasuring(false);
-    clearPoints();
+    resetCalibration();
     setIsCalibrating(true);
     setHasCalibrated(false);
   };
@@ -105,6 +106,7 @@ export default function Dashboard() {
   };
 
   const handleStart = () => {
+    videoRef.current?.play().catch(console.error);
     setIsMeasuring(true);
   };
 
@@ -173,6 +175,7 @@ export default function Dashboard() {
 
           <SystemStatus 
             isReady={isReady}
+            error={trackingError}
             isCalibrating={isCalibrating}
             isMeasuring={isMeasuring && viewMode === 'capture'}
             hasCalibrated={hasCalibrated}
@@ -187,7 +190,7 @@ export default function Dashboard() {
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <select 
                       value={selectedStimulus} 
-                      onChange={(e) => setSelectedStimulus(e.target.value)}
+                      onChange={(e) => handleStimulusChange(e.target.value)}
                       disabled={isMeasuring}
                       style={{
                         flex: 1,
@@ -226,7 +229,8 @@ export default function Dashboard() {
                     <button 
                       className={`${styles.btn} ${styles.btnSecondary}`}
                       onClick={handleStart}
-                      disabled={!hasCalibrated}
+                      disabled={!isReady}
+                      title={isReady && !hasCalibrated ? 'Calibration is recommended before collecting clinical data.' : undefined}
                     >
                       2. Start Live Capture
                     </button>
@@ -323,7 +327,11 @@ export default function Dashboard() {
       </main>
 
       {isCalibrating && (
-        <CalibrationOverlay onComplete={handleCalibrationComplete} />
+        <CalibrationOverlay
+          onComplete={handleCalibrationComplete}
+          onPointClick={recordCalibrationPoint}
+          calibrationTargetRef={containerRef}
+        />
       )}
     </div>
   );

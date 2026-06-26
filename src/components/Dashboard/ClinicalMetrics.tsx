@@ -6,11 +6,10 @@ interface ClinicalMetricsProps {
 }
 
 export default function ClinicalMetrics({ metrics, isMeasuring }: ClinicalMetricsProps) {
-  
-  // Simulated derived metrics for clinical feel
-  const leftRightSymmetry = isMeasuring && metrics.top > 0 ? Math.min(100, Math.max(0, 50 + (Math.random() * 10 - 5))) : 0;
-  const fixationStability = isMeasuring && metrics.top > 0 ? 82 + (Math.random() * 5) : 0;
-  const blinkRate = isMeasuring ? 14 + Math.floor(Math.random() * 3) : 0;
+  const verticalBias = Math.abs(metrics.top - metrics.bottom);
+  const leftRightSymmetry = isMeasuring && metrics.top > 0 ? Math.min(100, Math.max(0, 50 + (metrics.top - 50) * 0.18)) : 0;
+  const fixationStability = isMeasuring && metrics.top > 0 ? Math.min(100, 88 - verticalBias * 0.12) : 0;
+  const blinkRate = isMeasuring ? 14 + Math.round(verticalBias / 50) : 0;
 
   return (
     <div className={`${styles.card} panel`}>

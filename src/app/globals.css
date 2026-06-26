@@ -85,9 +85,3 @@ body {
   animation: pulse-coral 2s infinite;
   display: inline-block;
 }
-
-/* Hide WebGazer UI */
-#webgazerVideoContainer {
-  opacity: 0 !important;
-  pointer-events: none;
-}

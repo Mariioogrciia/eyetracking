@@ -1,6 +1,6 @@
 import { useRef, forwardRef, useImperativeHandle, useState, useEffect } from 'react';
 import HeatmapOverlay from './HeatmapOverlay';
-import type { Point } from '@/hooks/useWebGazer';
+import type { Point } from '@/hooks/useEyeTracker';
 
 interface GazeTrackerProps {
   isMeasuring: boolean;

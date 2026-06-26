@@ -2,14 +2,16 @@ import styles from '@/app/page.module.css';
 
 interface SystemStatusProps {
   isReady: boolean;
+  error?: string | null;
   isCalibrating: boolean;
   isMeasuring: boolean;
   hasCalibrated: boolean;
 }
 
-export default function SystemStatus({ isReady, isCalibrating, isMeasuring, hasCalibrated }: SystemStatusProps) {
+export default function SystemStatus({ isReady, error, isCalibrating, isMeasuring, hasCalibrated }: SystemStatusProps) {
   
   const getStatusDisplay = () => {
+    if (error) return { text: 'Camera Error', color: 'var(--accent-coral)' };
     if (!isReady) return { text: 'Initializing...', color: 'var(--text-muted)' };
     if (isCalibrating) return { text: 'Calibrating...', color: 'var(--accent-violet)' };
     if (isMeasuring) return { text: 'Active Recording', color: 'var(--accent-coral)' };
@@ -38,7 +40,7 @@ export default function SystemStatus({ isReady, isCalibrating, isMeasuring, hasC
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Camera Feed</span>
           <span style={{ fontSize: '0.85rem', color: isReady ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-            {isReady ? 'Active' : 'Offline'}
+            {error ? 'Unavailable' : (isReady ? 'Active' : 'Offline')}
           </span>
         </div>
 
@@ -65,6 +67,20 @@ export default function SystemStatus({ isReady, isCalibrating, isMeasuring, hasC
             {hasCalibrated ? '96%' : '--'}
           </span>
         </div>
+
+        {error && (
+          <div style={{
+            padding: '10px',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid rgba(244, 63, 94, 0.2)',
+            background: 'rgba(244, 63, 94, 0.08)',
+            color: 'var(--accent-coral)',
+            fontSize: '0.75rem',
+            lineHeight: 1.4
+          }}>
+            {error}
+          </div>
+        )}
 
       </div>
     </div>

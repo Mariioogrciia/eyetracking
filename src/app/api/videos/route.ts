@@ -15,7 +15,7 @@ export async function GET() {
       }));
     
     return NextResponse.json({ videos });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to read public directory' }, { status: 500 });
   }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Point } from '@/hooks/useWebGazer';
+import type { Point } from '@/hooks/useEyeTracker';
 
 interface MobileHeatmapProps {
   points: Point[];
