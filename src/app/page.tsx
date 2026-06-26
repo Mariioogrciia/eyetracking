@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import GazeTracker from '@/components/GazeTracker/GazeTracker';
 import CalibrationOverlay from '@/components/GazeTracker/CalibrationOverlay';
+import MobileHeatmap from '@/components/Analysis/MobileHeatmap';
 import Header from '@/components/Dashboard/Header';
 import SystemStatus from '@/components/Dashboard/SystemStatus';
 import ClinicalMetrics from '@/components/Dashboard/ClinicalMetrics';
@@ -11,24 +12,30 @@ import { useWebGazer } from '@/hooks/useWebGazer';
 import styles from './page.module.css';
 
 // Mock Dataset
-const DATASET = [
+const INITIAL_DATASET = [
   { id: 'v_001', name: 'Stimulus A - Standard', src: '/video.mp4' },
   { id: 'v_002', name: 'Stimulus B - High Contrast', src: '/video2.mp4' },
   { id: 'v_003', name: 'Stimulus C - Dynamic', src: '/video3.mp4' },
 ];
 
 export default function Dashboard() {
+  const [viewMode, setViewMode] = useState<'capture' | 'analysis'>('capture');
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [isMeasuring, setIsMeasuring] = useState(false);
   const [hasCalibrated, setHasCalibrated] = useState(false);
   const [metrics, setMetrics] = useState({ top: 0, bottom: 0 });
-  const [selectedStimulus, setSelectedStimulus] = useState(DATASET[0].id);
+  const [dataset, setDataset] = useState(INITIAL_DATASET);
+  const [selectedStimulus, setSelectedStimulus] = useState(INITIAL_DATASET[0].id);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const [videoRef, setVideoRef] = useState<React.RefObject<HTMLVideoElement | null>>({ current: null });
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Kept just in case, but hidden from UI
+  };
+
   const { isReady, getPoints, clearPoints } = useWebGazer({
-    isMeasuring,
+    isMeasuring: isMeasuring && viewMode === 'capture',
     containerRef,
     videoRef,
     canvasWidth: 360,
@@ -36,7 +43,21 @@ export default function Dashboard() {
     videoId: selectedStimulus
   });
 
-  const currentVideoSrc = DATASET.find(d => d.id === selectedStimulus)?.src || '';
+  const currentVideoSrc = dataset.find(d => d.id === selectedStimulus)?.src || '';
+
+  // Fetch videos from public directory on mount
+  useEffect(() => {
+    fetch('/api/videos')
+      .then(res => res.json())
+      .then(data => {
+        if (data.videos && data.videos.length > 0) {
+          setDataset(data.videos);
+          // Only update selected if current is not in the new list (or on first load)
+          setSelectedStimulus(data.videos[0].id);
+        }
+      })
+      .catch(console.error);
+  }, []);
 
   // Clean data when changing stimulus
   useEffect(() => {
@@ -49,7 +70,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (isMeasuring) {
+    if (isMeasuring && viewMode === 'capture') {
       interval = setInterval(() => {
         const points = getPoints();
         if (points.length === 0) {
@@ -69,7 +90,7 @@ export default function Dashboard() {
       }, 500);
     }
     return () => clearInterval(interval);
-  }, [isMeasuring, getPoints]);
+  }, [isMeasuring, viewMode, getPoints]);
 
   const handleCalibrate = () => {
     setIsMeasuring(false);
@@ -104,7 +125,7 @@ export default function Dashboard() {
       exportDate: new Date().toISOString(),
       calibrationQuality: hasCalibrated ? 0.96 : 0,
       totalSamples: points.length,
-      stimuli: DATASET,
+      stimuli: dataset,
       data: points
     };
 
@@ -132,81 +153,127 @@ export default function Dashboard() {
         {/* Left Column: Control Panel */}
         <aside className={styles.sidebar}>
           
+          {/* View Mode Toggle */}
+          <div className={`${styles.card} panel`} style={{ padding: '8px', display: 'flex', gap: '8px' }}>
+            <button 
+              className={styles.btn} 
+              style={{ flex: 1, background: viewMode === 'capture' ? 'var(--bg-panel)' : 'transparent', border: viewMode === 'capture' ? '1px solid var(--border-light)' : '1px solid transparent', color: viewMode === 'capture' ? 'var(--text-primary)' : 'var(--text-muted)' }}
+              onClick={() => setViewMode('capture')}
+            >
+              Live Capture
+            </button>
+            <button 
+              className={styles.btn} 
+              style={{ flex: 1, background: viewMode === 'analysis' ? 'var(--bg-panel)' : 'transparent', border: viewMode === 'analysis' ? '1px solid var(--border-light)' : '1px solid transparent', color: viewMode === 'analysis' ? 'var(--text-primary)' : 'var(--text-muted)' }}
+              onClick={() => setViewMode('analysis')}
+            >
+              Analysis Report
+            </button>
+          </div>
+
           <SystemStatus 
             isReady={isReady}
             isCalibrating={isCalibrating}
-            isMeasuring={isMeasuring}
+            isMeasuring={isMeasuring && viewMode === 'capture'}
             hasCalibrated={hasCalibrated}
           />
 
-          <div className={`${styles.card} panel`}>
-            <h2 className={styles.sectionTitle}>Stimulus Setup</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Select Dataset Video</label>
-              <select 
-                value={selectedStimulus} 
-                onChange={(e) => setSelectedStimulus(e.target.value)}
-                disabled={isMeasuring}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid var(--border-light)',
-                  color: 'var(--text-primary)',
-                  outline: 'none',
-                  cursor: isMeasuring ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {DATASET.map(d => (
-                  <option key={d.id} value={d.id} style={{ background: '#111827' }}>
-                    {d.id} - {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          {viewMode === 'capture' ? (
+            <>
+              <div className={`${styles.card} panel`}>
+                <h2 className={styles.sectionTitle}>Stimulus Setup</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Select Dataset Video</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <select 
+                      value={selectedStimulus} 
+                      onChange={(e) => setSelectedStimulus(e.target.value)}
+                      disabled={isMeasuring}
+                      style={{
+                        flex: 1,
+                        padding: '10px',
+                        borderRadius: 'var(--radius-sm)',
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid var(--border-light)',
+                        color: 'var(--text-primary)',
+                        outline: 'none',
+                        cursor: isMeasuring ? 'not-allowed' : 'pointer',
+                        width: '100%'
+                      }}
+                    >
+                      {dataset.map(d => (
+                        <option key={d.id} value={d.id} style={{ background: '#111827' }}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
 
-          <div className={`${styles.card} panel`}>
-            <h2 className={styles.sectionTitle}>Session Controls</h2>
-            <div className={styles.btnGroup}>
-              <button 
-                className={`${styles.btn} ${styles.btnPrimary}`} 
-                onClick={handleCalibrate}
-                disabled={!isReady || isMeasuring}
-              >
-                1. Initial Calibration
-              </button>
-              
-              {!isMeasuring ? (
-                <button 
-                  className={`${styles.btn} ${styles.btnSecondary}`}
-                  onClick={handleStart}
-                  disabled={!hasCalibrated}
-                >
-                  2. Start Live Capture
-                </button>
-              ) : (
-                <button 
-                  className={`${styles.btn} ${styles.btnSecondary}`}
-                  onClick={handlePause}
-                >
-                  Pause Capture
-                </button>
-              )}
-              
-              <button 
-                className={`${styles.btn} ${styles.btnDanger}`}
-                onClick={handleClear}
-                disabled={isMeasuring}
-              >
-                Reset Visual Data
-              </button>
-            </div>
-          </div>
+              <div className={`${styles.card} panel`}>
+                <h2 className={styles.sectionTitle}>Session Controls</h2>
+                <div className={styles.btnGroup}>
+                  <button 
+                    className={`${styles.btn} ${styles.btnPrimary}`} 
+                    onClick={handleCalibrate}
+                    disabled={!isReady || isMeasuring}
+                  >
+                    1. Initial Calibration
+                  </button>
+                  
+                  {!isMeasuring ? (
+                    <button 
+                      className={`${styles.btn} ${styles.btnSecondary}`}
+                      onClick={handleStart}
+                      disabled={!hasCalibrated}
+                    >
+                      2. Start Live Capture
+                    </button>
+                  ) : (
+                    <button 
+                      className={`${styles.btn} ${styles.btnSecondary}`}
+                      onClick={handlePause}
+                    >
+                      Pause Capture
+                    </button>
+                  )}
+                  
+                  <button 
+                    className={`${styles.btn} ${styles.btnDanger}`}
+                    onClick={handleClear}
+                    disabled={isMeasuring}
+                  >
+                    Reset Visual Data
+                  </button>
+                </div>
+              </div>
 
-          <ClinicalMetrics metrics={metrics} isMeasuring={isMeasuring} />
-          
+              <ClinicalMetrics metrics={metrics} isMeasuring={isMeasuring} />
+            </>
+          ) : (
+            /* Analysis Controls */
+            <div className={`${styles.card} panel`}>
+              <h2 className={styles.sectionTitle}>Session Data Summary</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Stimulus</span>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>{dataset.find(d => d.id === selectedStimulus)?.name}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Total Data Points</span>
+                  <span className="mono" style={{ fontSize: '0.85rem', color: 'var(--accent-teal)' }}>{getPoints().length}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Quality Score</span>
+                  <span className="mono" style={{ fontSize: '0.85rem', color: hasCalibrated ? 'var(--accent-teal)' : 'var(--accent-coral)' }}>
+                    {hasCalibrated ? '96%' : 'Untracked'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <Biomarkers />
 
         </aside>
@@ -214,13 +281,17 @@ export default function Dashboard() {
         {/* Right Column: Viewport */}
         <section className={styles.viewportArea}>
           <div className={styles.viewportContainer}>
-            <GazeTracker 
-              ref={containerRef}
-              isMeasuring={isMeasuring}
-              getPoints={getPoints}
-              videoSrc={currentVideoSrc}
-              onVideoRef={handleVideoRef}
-            />
+            {viewMode === 'capture' ? (
+              <GazeTracker 
+                ref={containerRef}
+                isMeasuring={isMeasuring}
+                getPoints={getPoints}
+                videoSrc={currentVideoSrc}
+                onVideoRef={handleVideoRef}
+              />
+            ) : (
+              <MobileHeatmap points={getPoints()} />
+            )}
           </div>
           
           {/* Bottom Summary Bar */}
@@ -228,11 +299,9 @@ export default function Dashboard() {
             <div style={{ display: 'flex', gap: '24px' }}>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Session Progress</span>
-                <span className="mono" style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>{isMeasuring ? 'In Progress' : 'Idle'}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Capture FPS</span>
-                <span className="mono" style={{ fontSize: '0.85rem', color: isMeasuring ? 'var(--accent-teal)' : 'var(--text-muted)' }}>{isMeasuring ? '60.0' : '--'}</span>
+                <span className="mono" style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                  {viewMode === 'analysis' ? 'Analysis Mode' : (isMeasuring ? 'In Progress' : 'Idle')}
+                </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Data Points</span>
@@ -244,7 +313,7 @@ export default function Dashboard() {
               className={`${styles.btn} ${styles.btnPrimary}`} 
               style={{ width: 'auto', padding: '8px 16px', fontSize: '0.75rem', background: 'var(--accent-violet)' }} 
               onClick={handleExport}
-              disabled={isMeasuring || getPoints().length === 0}
+              disabled={(isMeasuring && viewMode === 'capture') || getPoints().length === 0}
             >
               Export Clinical Report (JSON)
             </button>
