@@ -7,14 +7,23 @@ interface GazeTrackerProps {
   getPoints: () => Point[];
   canvasWidth?: number;
   canvasHeight?: number;
+  videoSrc: string;
+  onVideoRef?: (ref: React.RefObject<HTMLVideoElement | null>) => void;
 }
 
 const GazeTracker = forwardRef<HTMLDivElement, GazeTrackerProps>(
-  ({ isMeasuring, getPoints, canvasWidth = 360, canvasHeight = 640 }, ref) => {
+  ({ isMeasuring, getPoints, canvasWidth = 360, canvasHeight = 640, videoSrc, onVideoRef }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
     const [currentTime, setCurrentTime] = useState('');
 
     useImperativeHandle(ref, () => containerRef.current as HTMLDivElement);
+
+    useEffect(() => {
+      if (onVideoRef) {
+        onVideoRef(videoRef);
+      }
+    }, [onVideoRef]);
 
     useEffect(() => {
       const timer = setInterval(() => {
@@ -29,9 +38,8 @@ const GazeTracker = forwardRef<HTMLDivElement, GazeTrackerProps>(
         ref={containerRef}
         style={{
           position: 'relative',
-          width: '100%',
           height: '100%',
-          maxHeight: 'calc(100vh - 112px)', // minus header and padding
+          width: 'auto',
           aspectRatio: '9/16',
           margin: '0 auto',
           backgroundColor: '#000',
@@ -41,42 +49,42 @@ const GazeTracker = forwardRef<HTMLDivElement, GazeTrackerProps>(
           justifyContent: 'center',
           alignItems: 'center',
           color: '#666',
+          boxShadow: '0 0 0 1px var(--border-color)',
         }}
       >
         <div style={{ zIndex: 0, padding: '20px', textAlign: 'center' }}>
-          Coloca video.mp4 en la carpeta public para la demo.
+          No stimulus found.
         </div>
         
-        <video 
-          autoPlay 
-          loop 
-          muted 
-          playsInline
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            zIndex: 1,
-            opacity: isMeasuring ? 1 : 0.6,
-            transition: 'opacity 0.5s ease',
-            filter: 'contrast(1.1) saturate(1.1)',
-          }}
-        >
-          <source src="/video.mp4" type="video/mp4" />
-        </video>
+        {videoSrc && (
+          <video 
+            ref={videoRef}
+            src={videoSrc}
+            autoPlay 
+            loop 
+            muted 
+            playsInline
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              zIndex: 1,
+              opacity: isMeasuring ? 1 : 0.6,
+              transition: 'opacity 0.5s ease',
+              filter: 'contrast(1.1) saturate(1.1)',
+            }}
+          />
+        )}
 
-        {/* Viewport UI Overlays */}
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 20, pointerEvents: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 'var(--radius-md)' }}>
-          {/* Corner marks */}
           <div style={{ position: 'absolute', top: '20px', left: '20px', width: '20px', height: '20px', borderTop: '2px solid var(--accent-cyan)', borderLeft: '2px solid var(--accent-cyan)' }} />
           <div style={{ position: 'absolute', top: '20px', right: '20px', width: '20px', height: '20px', borderTop: '2px solid var(--accent-cyan)', borderRight: '2px solid var(--accent-cyan)' }} />
           <div style={{ position: 'absolute', bottom: '20px', left: '20px', width: '20px', height: '20px', borderBottom: '2px solid var(--accent-cyan)', borderLeft: '2px solid var(--accent-cyan)' }} />
           <div style={{ position: 'absolute', bottom: '20px', right: '20px', width: '20px', height: '20px', borderBottom: '2px solid var(--accent-cyan)', borderRight: '2px solid var(--accent-cyan)' }} />
           
-          {/* Top Info Bar */}
           <div style={{ position: 'absolute', top: '24px', left: '48px', right: '48px', display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.8)', fontSize: '0.75rem', fontFamily: 'var(--font-mono)' }}>
             <span className="mono">{currentTime}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -85,13 +93,11 @@ const GazeTracker = forwardRef<HTMLDivElement, GazeTrackerProps>(
             </div>
           </div>
 
-          {/* Crosshairs */}
           <div style={{ position: 'absolute', top: '50%', left: '48px', right: '48px', height: '1px', background: 'rgba(255,255,255,0.1)' }} />
           <div style={{ position: 'absolute', left: '50%', top: '48px', bottom: '48px', width: '1px', background: 'rgba(255,255,255,0.1)' }} />
           <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '30px', height: '30px', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '50%' }} />
         </div>
 
-        {/* Note: In a real implementation we would dynamically resize canvas width/height to match container, but for this MVP 360x640 is hardcoded in the parent hook, so we pass it explicitly here if needed. To be responsive we scale it via CSS. */}
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10 }}>
            <HeatmapOverlay 
              width={canvasWidth} 

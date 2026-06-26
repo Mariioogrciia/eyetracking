@@ -1,22 +1,28 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-export type Point = { x: number; y: number };
+export type Point = { 
+  x: number; 
+  y: number; 
+  normalizedX: number;
+  normalizedY: number;
+  timestamp: number;
+  videoTime: number;
+  videoId: string;
+};
 
 interface UseWebGazerProps {
   isMeasuring: boolean;
   containerRef: React.RefObject<HTMLDivElement | null>;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   canvasWidth: number;
   canvasHeight: number;
+  videoId: string;
 }
 
-export function useWebGazer({ isMeasuring, containerRef, canvasWidth, canvasHeight }: UseWebGazerProps) {
+export function useWebGazer({ isMeasuring, containerRef, videoRef, canvasWidth, canvasHeight, videoId }: UseWebGazerProps) {
   const [isReady, setIsReady] = useState(false);
   const [points, setPoints] = useState<Point[]>([]);
   const webgazerRef = useRef<any>(null);
-  
-  // To avoid constant state updates on every frame, we could mutate a ref for points and only expose state periodically
-  // but for a React MVP, updating state can be okay if we throttle or handle it efficiently.
-  // Actually, WebGazer fires rapidly. A mutable ref is better for performance, and we can force an update for metrics.
   const pointsRef = useRef<Point[]>([]);
 
   const initWebGazer = useCallback(async () => {
@@ -26,13 +32,8 @@ export function useWebGazer({ isMeasuring, containerRef, canvasWidth, canvasHeig
     webgazerRef.current = wg;
 
     await wg.setRegression('ridge')
-      .setGazeListener((data: any, elapsedTime: number) => {
-        if (!data) return;
-        
-        // This is tricky: we only record points if we're measuring, 
-        // but the listener is global. We use a mutable ref for measuring state or check the closure?
-        // Since setGazeListener captures the initial closure, it's safer to access a ref or window variable,
-        // OR we can just rely on the component using the returned `pointsRef`.
+      .setGazeListener((data: any) => {
+        // We handle capture logic inside the useEffect to have fresh closure state via refs
       })
       .begin();
 
@@ -40,17 +41,14 @@ export function useWebGazer({ isMeasuring, containerRef, canvasWidth, canvasHeig
     setIsReady(true);
   }, []);
 
-  // We need a way to let the gaze listener know about `isMeasuring` and `containerRef`.
-  // Since we don't want to re-register the listener, we use refs.
-  const stateRef = useRef({ isMeasuring, containerRef, canvasWidth, canvasHeight });
+  const stateRef = useRef({ isMeasuring, containerRef, videoRef, canvasWidth, canvasHeight, videoId });
   
   useEffect(() => {
-    stateRef.current = { isMeasuring, containerRef, canvasWidth, canvasHeight };
-  }, [isMeasuring, containerRef, canvasWidth, canvasHeight]);
+    stateRef.current = { isMeasuring, containerRef, videoRef, canvasWidth, canvasHeight, videoId };
+  }, [isMeasuring, containerRef, videoRef, canvasWidth, canvasHeight, videoId]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).webgazer && !isReady) {
-      // Re-register listener safely
       const wg = (window as any).webgazer;
       
       wg.setGazeListener((data: any) => {
@@ -66,9 +64,22 @@ export function useWebGazer({ isMeasuring, containerRef, canvasWidth, canvasHeig
           const scaleX = state.canvasWidth / rect.width;
           const scaleY = state.canvasHeight / rect.height;
           
+          const normalizedX = xRel / rect.width;
+          const normalizedY = yRel / rect.height;
+          
+          let currentVideoTime = 0;
+          if (state.videoRef.current) {
+            currentVideoTime = state.videoRef.current.currentTime;
+          }
+
           pointsRef.current.push({
             x: xRel * scaleX,
-            y: yRel * scaleY
+            y: yRel * scaleY,
+            normalizedX,
+            normalizedY,
+            timestamp: Date.now(),
+            videoTime: currentVideoTime,
+            videoId: state.videoId
           });
         }
       });
@@ -77,16 +88,11 @@ export function useWebGazer({ isMeasuring, containerRef, canvasWidth, canvasHeig
          initWebGazer();
       }
     }
-
-    return () => {
-      // Cleanup? WebGazer is a singleton. 
-      // wg.end() would stop the camera entirely. We might not want to do this on component unmount if navigating.
-    };
   }, [initWebGazer, isReady]);
 
   const clearPoints = useCallback(() => {
     pointsRef.current = [];
-    setPoints([]); // force update if needed
+    setPoints([]);
   }, []);
 
   const getPoints = useCallback(() => {

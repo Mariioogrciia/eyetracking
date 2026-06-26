@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import GazeTracker from '@/components/GazeTracker/GazeTracker';
 import CalibrationOverlay from '@/components/GazeTracker/CalibrationOverlay';
 import Header from '@/components/Dashboard/Header';
@@ -10,19 +10,42 @@ import Biomarkers from '@/components/Dashboard/Biomarkers';
 import { useWebGazer } from '@/hooks/useWebGazer';
 import styles from './page.module.css';
 
+// Mock Dataset
+const DATASET = [
+  { id: 'v_001', name: 'Stimulus A - Standard', src: '/video.mp4' },
+  { id: 'v_002', name: 'Stimulus B - High Contrast', src: '/video2.mp4' },
+  { id: 'v_003', name: 'Stimulus C - Dynamic', src: '/video3.mp4' },
+];
+
 export default function Dashboard() {
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [isMeasuring, setIsMeasuring] = useState(false);
   const [hasCalibrated, setHasCalibrated] = useState(false);
   const [metrics, setMetrics] = useState({ top: 0, bottom: 0 });
+  const [selectedStimulus, setSelectedStimulus] = useState(DATASET[0].id);
+  
   const containerRef = useRef<HTMLDivElement>(null);
+  const [videoRef, setVideoRef] = useState<React.RefObject<HTMLVideoElement | null>>({ current: null });
 
   const { isReady, getPoints, clearPoints } = useWebGazer({
     isMeasuring,
     containerRef,
+    videoRef,
     canvasWidth: 360,
-    canvasHeight: 640
+    canvasHeight: 640,
+    videoId: selectedStimulus
   });
+
+  const currentVideoSrc = DATASET.find(d => d.id === selectedStimulus)?.src || '';
+
+  // Clean data when changing stimulus
+  useEffect(() => {
+    if (isMeasuring) {
+      setIsMeasuring(false);
+    }
+    clearPoints();
+    setMetrics({ top: 0, bottom: 0 });
+  }, [selectedStimulus, clearPoints]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -73,6 +96,33 @@ export default function Dashboard() {
     setMetrics({ top: 0, bottom: 0 });
   };
 
+  const handleExport = () => {
+    const points = getPoints();
+    const payload = {
+      patientId: 'PT-8492-X',
+      sessionId: 'SN-2026-06',
+      exportDate: new Date().toISOString(),
+      calibrationQuality: hasCalibrated ? 0.96 : 0,
+      totalSamples: points.length,
+      stimuli: DATASET,
+      data: points
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `session_PT-8492-X_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleVideoRef = useCallback((ref: React.RefObject<HTMLVideoElement | null>) => {
+    setVideoRef(ref);
+  }, []);
+
   return (
     <div className={styles.layout}>
       <Header />
@@ -88,6 +138,34 @@ export default function Dashboard() {
             isMeasuring={isMeasuring}
             hasCalibrated={hasCalibrated}
           />
+
+          <div className={`${styles.card} panel`}>
+            <h2 className={styles.sectionTitle}>Stimulus Setup</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Select Dataset Video</label>
+              <select 
+                value={selectedStimulus} 
+                onChange={(e) => setSelectedStimulus(e.target.value)}
+                disabled={isMeasuring}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid var(--border-light)',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                  cursor: isMeasuring ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {DATASET.map(d => (
+                  <option key={d.id} value={d.id} style={{ background: '#111827' }}>
+                    {d.id} - {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           <div className={`${styles.card} panel`}>
             <h2 className={styles.sectionTitle}>Session Controls</h2>
@@ -140,6 +218,8 @@ export default function Dashboard() {
               ref={containerRef}
               isMeasuring={isMeasuring}
               getPoints={getPoints}
+              videoSrc={currentVideoSrc}
+              onVideoRef={handleVideoRef}
             />
           </div>
           
@@ -154,10 +234,19 @@ export default function Dashboard() {
                 <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Capture FPS</span>
                 <span className="mono" style={{ fontSize: '0.85rem', color: isMeasuring ? 'var(--accent-teal)' : 'var(--text-muted)' }}>{isMeasuring ? '60.0' : '--'}</span>
               </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Data Points</span>
+                <span className="mono" style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>{getPoints().length}</span>
+              </div>
             </div>
             
-            <button className={`${styles.btn} ${styles.btnSecondary}`} style={{ width: 'auto', padding: '8px 16px', fontSize: '0.75rem' }} disabled={isMeasuring || !hasCalibrated}>
-              Export Clinical Report
+            <button 
+              className={`${styles.btn} ${styles.btnPrimary}`} 
+              style={{ width: 'auto', padding: '8px 16px', fontSize: '0.75rem', background: 'var(--accent-violet)' }} 
+              onClick={handleExport}
+              disabled={isMeasuring || getPoints().length === 0}
+            >
+              Export Clinical Report (JSON)
             </button>
           </div>
         </section>

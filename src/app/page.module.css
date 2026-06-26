@@ -1,9 +1,9 @@
 .layout {
-  display: grid;
-  grid-template-rows: 64px 1fr;
-  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
   width: 100vw;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 /* Header Area */
@@ -14,6 +14,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0 24px;
+  min-height: 64px;
 }
 
 .brand {
@@ -64,10 +65,16 @@
 .main {
   display: grid;
   grid-template-columns: 360px 1fr;
-  height: calc(100vh - 64px);
+  flex: 1;
   gap: 24px;
   padding: 24px;
-  overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  .main {
+    display: flex;
+    flex-direction: column;
+  }
 }
 
 /* Sidebar / Left Panel */
@@ -75,7 +82,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow-y: auto;
   padding-right: 4px;
 }
 
