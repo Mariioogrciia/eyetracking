@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gaze Heatmap sobre vídeo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            background-color: #007bff;
+            color: white;
+            transition: background-color 0.2s, opacity 0.2s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        #status-bar {
+            margin-bottom: 15px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #555;
+            background: #e9ecef;
+            padding: 8px 16px;
+            border-radius: 20px;
+        }
+
+        #metrics {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            font-size: 16px;
+            background: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .metric-val {
+            font-weight: bold;
+            color: #e63946;
+        }
+
+        /* Stage */
+        #stage {
+            position: relative;
+            width: 360px;
+            height: 640px;
+            background-color: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #666;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        #video-player {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        #heat {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        /* Calibration Overlay */
+        #calibration-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(255, 255, 255, 0.95);
+            z-index: 9999;
+            display: none;
+        }
+
+        .calib-point {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: #e63946;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: transform 0.1s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            box-shadow: 0 0 10px rgba(230, 57, 70, 0.5);
+        }
+
+        .calib-point:active {
+            transform: translate(-50%, -50%) scale(0.9);
+        }
+
+        .calib-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            pointer-events: none;
+            color: #333;
+        }
+
+        /* Hide WebGazer UI mostly */
+        #webgazerVideoContainer {
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+    </style>
+    <!-- WebGazer from CDN -->
+    <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
+</head>
+<body>
+
+    <h1>Gaze Heatmap sobre vídeo MVP</h1>
+
+    <div id="status-bar">Esperando interacción...</div>
+
+    <div class="controls">
+        <button id="btn-calibrate">1. Calibrar</button>
+        <button id="btn-start" disabled>2. Empezar a medir</button>
+        <button id="btn-clear">Limpiar heatmap</button>
+    </div>
+
+    <div id="metrics">
+        <div>Mitad Superior: <span id="metric-top" class="metric-val">0%</span></div>
+        <div>Mitad Inferior: <span id="metric-bottom" class="metric-val">0%</span></div>
+    </div>
+
+    <div id="stage">
+        <!-- Fallback text if video fails -->
+        <div style="z-index: 0; padding: 20px;">Coloca video.mp4 en la misma carpeta para verlo aquí.</div>
+        <video id="video-player" loop muted playsinline>
+            <source src="video.mp4" type="video/mp4">
+        </video>
+        <canvas id="heat" width="360" height="640"></canvas>
+    </div>
+
+    <div id="calibration-overlay">
+        <div class="calib-text">Mira el punto y haz clic 5 veces en él.</div>
+        <!-- Points injected via JS -->
+    </div>
+
+    <script>
+        // --- State ---
+        let isMeasuring = false;
+        let points = [];
+        let calibClicks = {};
+        const CLICKS_PER_POINT = 5;
+
+        // --- DOM Elements ---
+        const btnCalibrate = document.getElementById('btn-calibrate');
+        const btnStart = document.getElementById('btn-start');
+        const btnClear = document.getElementById('btn-clear');
+        const statusBar = document.getElementById('status-bar');
+        const overlay = document.getElementById('calibration-overlay');
+        const stage = document.getElementById('stage');
+        const canvas = document.getElementById('heat');
+        const ctx = canvas.getContext('2d');
+        const metricTop = document.getElementById('metric-top');
+        const metricBottom = document.getElementById('metric-bottom');
+        const videoPlayer = document.getElementById('video-player');
+
+        // Play video if possible, but handle failure gracefully
+        videoPlayer.play().catch(e => console.log("Video no encontrado o requiere interacción", e));
+
+        function setStatus(text) {
+            statusBar.textContent = text;
+        }
+
+        // --- WebGazer Initialization ---
+        async function initWebGazer() {
+            setStatus("Iniciando WebGazer...");
+            
+            await webgazer.setRegression('ridge')
+                .setGazeListener(function(data, elapsedTime) {
+                    if (data == null) return;
+                    if (!isMeasuring) return;
+
+                    // Convert screen coordinates to stage-relative coordinates
+                    const rect = stage.getBoundingClientRect();
+                    const xRel = data.x - rect.left;
+                    const yRel = data.y - rect.top;
+
+                    // Check if gaze is inside the stage
+                    if (xRel >= 0 && xRel <= rect.width && yRel >= 0 && yRel <= rect.height) {
+                        // Normalize to canvas size in case it differs from CSS (it's 360x640 for both here)
+                        const scaleX = canvas.width / rect.width;
+                        const scaleY = canvas.height / rect.height;
+                        
+                        points.push({
+                            x: xRel * scaleX,
+                            y: yRel * scaleY
+                        });
+                    }
+                })
+                .begin();
+
+            webgazer.showVideoPreview(false)
+                    .showPredictionPoints(false);
+            
+            setStatus("Listo para calibrar.");
+        }
+
+        // Init on load
+        window.addEventListener('load', initWebGazer);
+
+        // --- Calibration Logic ---
+        btnCalibrate.addEventListener('click', () => {
+            isMeasuring = false;
+            points = [];
+            btnStart.disabled = true;
+            calibClicks = {};
+            setupCalibrationPoints();
+            overlay.style.display = 'block';
+            setStatus("Calibrando...");
+        });
+
+        function setupCalibrationPoints() {
+            // Clear old points
+            const existingPoints = overlay.querySelectorAll('.calib-point');
+            existingPoints.forEach(p => p.remove());
+
+            const positions = [15, 50, 85];
+            let idCounter = 0;
+
+            positions.forEach(y => {
+                positions.forEach(x => {
+                    createCalibrationPoint(idCounter++, x, y);
+                });
+            });
+        }
+
+        function createCalibrationPoint(id, xPercent, yPercent) {
+            const pt = document.createElement('div');
+            pt.className = 'calib-point';
+            pt.style.left = `${xPercent}vw`;
+            pt.style.top = `${yPercent}vh`;
+            pt.dataset.id = id;
+            pt.dataset.clicks = 0;
+            pt.innerText = CLICKS_PER_POINT;
+
+            pt.addEventListener('click', function(e) {
+                let clicks = parseInt(this.dataset.clicks) + 1;
+                this.dataset.clicks = clicks;
+                this.innerText = CLICKS_PER_POINT - clicks;
+                
+                // Let webgazer learn from the click event implicitly
+                // It listens to document clicks natively.
+
+                if (clicks >= CLICKS_PER_POINT) {
+                    this.style.backgroundColor = 'green';
+                    this.style.pointerEvents = 'none'; // Disable further clicks
+                    this.innerText = '✓';
+                    checkCalibrationComplete();
+                } else {
+                    // Small visual feedback
+                    this.style.backgroundColor = '#fca311';
+                    setTimeout(() => {
+                        if(parseInt(this.dataset.clicks) < CLICKS_PER_POINT) {
+                            this.style.backgroundColor = '#e63946';
+                        }
+                    }, 100);
+                }
+            });
+
+            overlay.appendChild(pt);
+        }
+
+        function checkCalibrationComplete() {
+            const allPoints = overlay.querySelectorAll('.calib-point');
+            let completed = 0;
+            allPoints.forEach(pt => {
+                if (parseInt(pt.dataset.clicks) >= CLICKS_PER_POINT) completed++;
+            });
+
+            if (completed === allPoints.length) {
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                    btnStart.disabled = false;
+                    setStatus("Calibración completada. Pulsa Empezar a medir.");
+                }, 500);
+            }
+        }
+
+        // --- Measurement and Heatmap ---
+        btnStart.addEventListener('click', () => {
+            isMeasuring = true;
+            setStatus("Midiendo... mira el vídeo.");
+            videoPlayer.play().catch(e => console.log(e)); // Ensure video is playing
+        });
+
+        btnClear.addEventListener('click', () => {
+            points = [];
+            renderHeatmap();
+            updateMetrics();
+        });
+
+        function renderHeatmap() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (points.length === 0) return;
+
+            // Draw points
+            points.forEach(p => {
+                const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 26);
+                gradient.addColorStop(0, 'rgba(230, 57, 70, 0.18)');
+                gradient.addColorStop(1, 'rgba(230, 57, 70, 0)');
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 26, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // Animation Loop
+        function animate() {
+            if (isMeasuring) {
+                renderHeatmap();
+            }
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // --- Metrics ---
+        function updateMetrics() {
+            if (points.length === 0) {
+                metricTop.textContent = '0%';
+                metricBottom.textContent = '0%';
+                return;
+            }
+
+            let topCount = 0;
+            const midY = canvas.height / 2;
+
+            points.forEach(p => {
+                if (p.y < midY) topCount++;
+            });
+
+            const topPercent = Math.round((topCount / points.length) * 100);
+            const bottomPercent = 100 - topPercent;
+
+            metricTop.textContent = `${topPercent}%`;
+            metricBottom.textContent = `${bottomPercent}%`;
+        }
+
+        // Update metrics every 500ms
+        setInterval(() => {
+            if (isMeasuring) updateMetrics();
+        }, 500);
+
+        // Save data before leaving to make sure webgazer properly stores localstorage
+        window.addEventListener("beforeunload", function (e) {
+            webgazer.end();
+        });
+    </script>
+</body>
+</html>

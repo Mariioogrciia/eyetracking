@@ -1,0 +1,180 @@
+.layout {
+  display: grid;
+  grid-template-rows: 64px 1fr;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* Header Area */
+.header {
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-base);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.logoText {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.metadata {
+  display: flex;
+  gap: 24px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.metadataItem {
+  display: flex;
+  flex-direction: column;
+}
+
+.metadataLabel {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.metadataValue {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Main Body Grid */
+.main {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  height: calc(100vh - 64px);
+  gap: 24px;
+  padding: 24px;
+  overflow: hidden;
+}
+
+/* Sidebar / Left Panel */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Sections in Sidebar */
+.sectionTitle {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Buttons */
+.btnGroup {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.btn {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 500;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.btnPrimary {
+  background: var(--accent-teal);
+  color: white;
+}
+.btnPrimary:hover:not(:disabled) {
+  background: #0f766e;
+}
+.btnPrimary:disabled {
+  opacity: 0.5;
+  background: var(--bg-panel);
+  border-color: var(--border-light);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.btnSecondary {
+  background: rgba(255,255,255,0.03);
+  border-color: var(--border-light);
+  color: var(--text-primary);
+}
+.btnSecondary:hover:not(:disabled) {
+  background: rgba(255,255,255,0.06);
+}
+
+.btnDanger {
+  color: var(--accent-coral);
+  border-color: rgba(244, 63, 94, 0.2);
+  background: rgba(244, 63, 94, 0.05);
+}
+.btnDanger:hover {
+  background: rgba(244, 63, 94, 0.1);
+}
+
+/* Viewport / Right Panel */
+.viewportArea {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+}
+
+.viewportContainer {
+  flex: 1;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  background: #000;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.bottomSummary {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+}

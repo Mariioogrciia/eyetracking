@@ -1,0 +1,93 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* Clinical Premium Palette */
+  --bg-base: #0B0E14; /* Deep Graphite Navy */
+  --bg-panel: #111827; /* Dark panel */
+  --bg-panel-glass: rgba(17, 24, 39, 0.7);
+  --border-color: rgba(255, 255, 255, 0.06);
+  --border-light: rgba(255, 255, 255, 0.12);
+  
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  
+  --accent-teal: #0D9488;
+  --accent-cyan: #06B6D4;
+  --accent-coral: #F43F5E; /* Alert/recording */
+  --accent-violet: #6366F1; /* Subtle AI signal */
+  
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  
+  --shadow-panel: 0 10px 40px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 15px rgba(6, 182, 212, 0.15);
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow: hidden; /* Full screen dashboard */
+}
+
+/* Glass & Panel Utilities */
+.panel {
+  background: var(--bg-panel-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Scrollbar styling for panels if needed */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Animations */
+@keyframes pulse-coral {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.recording-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--accent-coral);
+  box-shadow: 0 0 8px var(--accent-coral);
+  animation: pulse-coral 2s infinite;
+  display: inline-block;
+}
+
+/* Hide WebGazer UI */
+#webgazerVideoContainer {
+  opacity: 0 !important;
+  pointer-events: none;
+}
